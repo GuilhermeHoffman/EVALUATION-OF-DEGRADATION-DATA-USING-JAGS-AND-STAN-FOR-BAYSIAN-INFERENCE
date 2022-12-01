@@ -1,0 +1,21 @@
+model{
+    for(i in 1:n){
+        y[i] ~ dnorm(mu[i], tau)
+        mu[i] <- hours[i]/theta[units[i]]
+    }
+    for(l in 1:L){
+         theta[l] ~ dweib(beta, lambda) #(shape, scale)
+    }
+
+    beta ~ dgamma(a_beta, b_beta)
+    lambda ~ dgamma(a_lambda, b_lambda)
+    tau ~ dgamma(a_tau, b_tau)
+    sigma  <- sqrt(1/tau)
+
+    #predictive reliability at 4500, alpha quantile of lifetime distribution,
+    d  <-  lambda/pow(Df, beta)
+    r4500  <- exp(-d*pow(4500/C, beta))
+
+    # reliability function at sequence of times
+    talpha <- pow(( -(pow(Df, beta)/lambda)*log(1-alpha)), (1/beta))
+}
