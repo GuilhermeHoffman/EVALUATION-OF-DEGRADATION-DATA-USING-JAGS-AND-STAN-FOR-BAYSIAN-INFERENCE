@@ -1,6 +1,7 @@
 #Limpando os dados dos sistema
 rm(list=ls(all=TRUE))
 
+#Pacotes utilizados no trabalho
 library(tidyverse)
 library(rstan)
 library(coda)
@@ -13,6 +14,7 @@ library(bayesplot)
 require(rjags)
 require(R2jags)
 
+#Importacao dos dados, mudar o diretorio conforme a localizacao do aquivo lasers.txt
 setwd("C:/Users/guilh/OneDrive/Área de Trabalho/Pós Graduação/TCC/Projeto R TCC/TCC Jags")
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -22,8 +24,9 @@ wd <- getwd()
 lasers <- rio::import("lasers.txt") 
 glimpse(lasers)
 
-# no artigo aparentemente não está sendo feita essa mudança de escala!!!
-C <- 250 # utilize C <- 1 para obter resultados similares ao do artigo
+# no artigo aparentemente não está sendo feita essa mudança de escala,
+# utilize C <- 1 para obter resultados similares ao do artigo
+C <- 250 
 
 lasers <- lasers %>%
   mutate(
@@ -67,14 +70,15 @@ data <- with(
 )
 
 
-##################################################################################
-
+#Carregando os arquivos do JAGS e Stan
+#Uma vez carregado comente a linha 74
 mod_jags <- file.path(wd, "weibull.jags")
-# mod_stan <- stan_model(file="weibull.stan")
+mod_stan <- stan_model(file="weibull.stan")
+#Uma vez carregados comente a linha 79
 mod_stan <- readRDS("weibull.rds")
  #file.show(mod_jags)
 
-### --------------------------------------------------------
+#Execucao do software Jags
 
 run_jags <- function(){ 
   set.seed(1234567890)
@@ -91,6 +95,7 @@ run_jags <- function(){
   return(output)  
 }
 
+#Execucao do software Stan
 
 run_stan <- function(){
   set.seed(1234567890)
@@ -105,25 +110,26 @@ fit_stan <- run_stan()
 print(fit_jags)
 print(fit_stan, parameters)
 
-# comparando o tempo computacional nsim = 1:
-#comp1 <- benchmark(
-#  replications = 1,
-#  jags = run_jags(),
-#  stan = run_stan()
-#)
-# comparando o tempo computacional nsim = 10:
-#comp10 <- benchmark(
-#  replications = 10,
-#  jags = run_jags(),
-#  stan = run_stan()
-#)
-# comparando o tempo computacional nsim = 50:
-#comp50 <- benchmark(
-#  replications = 50,
-#  jags = run_jags(),
-#  stan = run_stan()
-#)
-# criando uma função genérica para extrair o tamamnho efetivo da cadeia:
+# comparando o tempo computacional replicacoes = 1:
+comp1 <- benchmark(
+replications = 1,
+  jags = run_jags(),
+  stan = run_stan()
+)
+# comparando o tempo computacional replicacoes = 10:
+comp10 <- benchmark(
+  replications = 10,
+  jags = run_jags(),
+  stan = run_stan()
+)
+# comparando o tempo computacional replicacoes = 50:
+comp50 <- benchmark(
+  replications = 50,
+  jags = run_jags(),
+  stan = run_stan()
+)
+
+# criando uma função generica para extrair o tamamnho efetivo da cadeia:
 effective_size <- function(object, parameters, ...) UseMethod("effective_size")
 
 effective_size.rjags <- function(object, parameters){
@@ -141,11 +147,11 @@ effective_size.stanfit <- function(object, parameters){
 neff_jags<- effective_size(fit_jags, parameters)
 neff_stan <- effective_size(fit_stan, parameters)
 
-# comparando:
+# comparando tamanho efetivo da cadeia:
 neff_stan/neff_jags
 
-samp_stan <- as.mcmc(with(extract(fit_stan), cbind(beta, lambda, sigma, r4500, talpha)))
-samp_jags <- as.mcmc(as.data.frame(fit_jags$BUGSoutput$sims.list))[, parameters]
+
+#Calculo do HPD
 
 H1 <- HPDinterval(samp_jags)
 H2 <- HPDinterval(samp_stan)
@@ -154,6 +160,11 @@ Ap2 <- apply(H2,  1, diff)
 Ap1/Ap2
 
 ##########
+#Amostras a posteriori 
+samp_stan <- as.mcmc(with(extract(fit_stan), cbind(beta, lambda, sigma, r4500, talpha)))
+samp_jags <- as.mcmc(as.data.frame(fit_jags$BUGSoutput$sims.list))[, parameters]
+
+
 #GRAFICOS
 #funcao extract para extrair dados do Stanfit
 stan_data <- extract(fit_stan,permuted = TRUE)
@@ -177,6 +188,8 @@ graph_jags <- data.frame(
   sigma = jags_data$sigma,
   software = "jags"
 )
+
+#Criando um data set com todos os dados
 
 amostra_graph <- bind_rows(graph_jags,graph_stan)
 glimpse(amostra_graph)
@@ -289,6 +302,7 @@ chains_graph_long <- chains_graph %>%
   )
 glimpse(chains_graph_long)
 
+
 #GRAFICO DAS CADEIAS
 ggplot(chains_graph_long, aes(x = Iteração, y = chains_graph, color = Cadeias)) +
   theme_bw()+
@@ -300,42 +314,6 @@ ggplot(chains_graph_long, aes(x = Iteração, y = chains_graph, color = Cadeias)
   ylab(NULL) + 
   theme(strip.background = element_blank(), # remove the background
         strip.placement = "outside")
-
-
-
- 
-stanmcmc_1 <- as.mcmc(fit_stan)
-stantmcmc <- as.mcmc.list(stanmcmc_1)
-jagsmcmc <- as.mcmc(fit_jags)
-
-
-#testes de convergência
-#Gelman-Rubin
-gelman.diag(jagsmcmc)
-gelman.diag(stanmcmc)
-
-#Heidelberg-Welch
-heidel.diag(jagsmcmc)
-heidel.diag(stanmcmc)
-
-#Geweke
-geweke.diag(jagsmcmc)
-geweke.diag(stanmcmc)
-
-#Raftery-Lewis
-raftery.diag(jagsmcmc)
-raftery.diag(stanmcmc)
-
-mcmcplots
-tidybayes
-
-tau <- 1/sigma2
-
-
-
-teste1 <- fit_jags$BUGSoutput$sims.list$beta
-r_lower = quantile(teste1,0.975)
-r_lower
 
 
 #Grafico de Densidade:
@@ -393,9 +371,11 @@ graph_jags_chains_talpha <- data.frame(
 )
 glimpse(graph_jags_chains_talpha)
 
-#Juntando os dados
+#Agrupando os dados
+
 relia_graph <- bind_rows(graph_stan_chains_r4500,graph_stan_chains_talpha,graph_jags_chains_r4500,graph_jags_chains_talpha)
 colnames(relia_graph) <- c('Iteração','upper_parameter', 'cadeia 1', 'cadeia 2', 'cadeia 3', 'cadeia 4', 'software')
+
 #Versao long_data
 relia_graph_long <- relia_graph %>%
   pivot_longer(
@@ -405,7 +385,7 @@ relia_graph_long <- relia_graph %>%
   )
 glimpse(relia_graph_long)
 
-#Grafico
+#Traceplot
 
 ggplot(relia_graph_long, aes(x = Iteração, y = relia_graph, color = Cadeias)) +
   theme_bw()+
@@ -425,72 +405,6 @@ ggplot(relia_graph_long, aes(x=relia_graph, col = Cadeias)) +
   facet_wrap(software~upper_parameter, scales = "free",
              labeller = as_labeller(c(r4500 = "R(4500)",talpha = "t_alpha", stan = "Stan", jags = "JAGS")))+
   labs(y = "Densidade", x = "Valor dos Parâmetros")
-
-
-#Gráfico de degradacao
-beta_stan.025 <- quantile(stan_data$beta, 0.025)
-beta_stan.025
-median_beta_stan <- median(stan_data$beta)
-median_beta_stan
-beta_stan.975 <- quantile(stan_data$beta, 0.975)
-beta_stan.975
-
-beta_jags.025 <- quantile(jags_data$beta, 0.025)
-beta_jags.025
-median_beta_jags <- median(jags_data$beta)
-median_beta_jags
-beta_jags.975 <- quantile(jags_data$beta, 0.975)
-beta_jags.975
-
-lambda_stan.025 <- quantile(stan_data$lambda, 0.025)
-lambda_stan.025
-median_lambda_stan <- median(stan_data$lambda)
-median_lambda_stan
-lambda_stan.975 <- quantile(stan_data$lambda, 0.975)
-lambda_stan.975
-
-lambda_jags.025 <- quantile(jags_data$lambda, 0.025)
-lambda_jags.025
-median_lambda_jags <- median(jags_data$lambda)
-median_lambda_jags
-lambda_jags.975 <- quantile(jags_data$lambda, 0.975)
-lambda_jags.975
-
-Df_ <- 10
-#func_stan <- function(x){(-((Df_^median_beta_stan)/median_lambda_stan)*log(1-x))^(1/median_beta_stan)} 
-#func_jags <- function(x){(-((Df^median_beta_jags)/median_lambda_jags)*log(1-x))^(1/median_beta_jags)} 
-
-#func_stan.025 <- function(x){(-((Df_^beta_stan.025)/lambda_stan.025)*log(1-x))^(1/beta_stan.025)} 
-#func_stan.975 <- function(x){(-((Df_^beta_stan.975)/lambda_stan.975)*log(1-x))^(1/beta_stan.975)} 
-
-
-#func_jags.025 <- function(x){(-((Df^beta_jags.025)/lambda_jags.025)*log(1-x))^(1/beta_jags.025)}
-#func_jags.975 <- function(x){(-((Df^beta_jags.975)/lambda_jags.975)*log(1-x))^(1/beta_jags.975)}
-
-
-func_jags <- function(x){exp(-((median_lambda_jags)/(Df^median_beta_jags))*((x)^median_beta_jags))}
-func_jags.025 <- function(x){exp(-((lambda_jags.025)/(Df^beta_jags.025))*((x)^beta_jags.025))}
-func_jags.975 <- function(x){exp(-((lambda_jags.975)/(Df^beta_jags.975))*((x)^beta_jags.975))}
-
-func_stan <- function(x){exp(-((median_lambda_stan)/(Df^median_beta_stan))*((x)^median_beta_stan))}
-func_stan.025 <- function(x){exp(-((lambda_stan.025)/(Df^beta_stan.025))*((x)^beta_stan.025))}
-func_stan.975 <- function(x){exp(-((lambda_stan.975)/(Df^beta_stan.975))*((x)^beta_stan.975))}
-
-
-
-rel_gg_stan <- ggplot(data.frame(x = c(15,30)), aes(x = x))+
-          stat_function(fun = func_stan, color = "blue")+
-          stat_function(fun = func_stan.025, lty=2, color = "red")+
-          stat_function(fun = func_stan.975, lty=2, color = "green")
-         
-rel_gg_stan
-
-rel_gg_jags <- ggplot(data.frame(x = c(15,30)), aes(x = x))+
-    stat_function(fun = func_jags, color = "blue")+
-    stat_function(fun = func_jags.025, lty=2, color = "red")+
-    stat_function(fun = func_jags.975, lty=2, color = "green")
-
-rel_gg_jags
 
 
 #Analise de autocorrelacao
@@ -583,14 +497,6 @@ t
 confiabilidadestan <- array(dim=c(4000,50))
 confiabilidadejags <- array(dim=c(4000,50))
 
-#for (x in 1:50) {
-#  for (y in 1:4000) {
-#    R_t[y,x] <- (exp(-((rel_stan_lambda[y])/(Df^rel_stan_beta[y]))*((x)^rel_stan_beta[y])))
-#  }
-  
-#}
-#R_t
-
 data_conf_jags <- rep(0,50)
 data_conf_jags.025 <- rep(0,50)
 data_conf_jags.975 <- rep(0,50)
@@ -665,21 +571,4 @@ ggplot()+
   scale_x_continuous( limits=c(3000, 7000),breaks=seq(3000,7000,500))
 rm(R_t)
 
-#trocar 
-amostra_test <- as.mcmc(confiabilidadejags) 
-HPD_test <- HPDinterval(amostra_test)
-HPD_test
-
-ggplot()+
-  geom_line(data = graf_conf_jags, aes(x=tempo_correto,y=data_conf_jags), color = 'blue')+
-  geom_line(data = graf_conf_jags, aes(x=tempo_correto,y=data_conf_jags.025), color = 'black', linetype="dotted")+
-  geom_line(data = graf_conf_jags, aes(x=tempo_correto,y=data_conf_jags.975), color = 'black', linetype="dotted")+
-  labs(y = "Confiabilidade JAGS", x = "Horas")+
-  geom_abline(intercept = 0.9, slope = 0, color = "red")+
-  geom_vline(intercept = 4500, xintercept = 4500, color = "green")+
-  theme_bw()+
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
-  scale_y_continuous(breaks=seq(0,1,0.1))+
-  geom_ribbon(aes(ymin = data_conf_jags.025, ymax = data_conf_jags.975), alpha = 0.2)+
-  scale_x_continuous( limits=c(3000, 7000),breaks=seq(3000,7000,500))
 
